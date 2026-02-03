@@ -20,8 +20,17 @@ interface IApiItem{
     category: string;
     title: string;
     image: string;
-    price: number;
+    price: number | null;
     description: string;
+}
+
+interface IApiOrder{
+    payment: payType;
+    email: string;
+    phone: string;
+    address: string;
+    total: number;
+    items: string[];
 }
 
 //Основной интерфейс товара
@@ -30,7 +39,7 @@ interface IItem {
     category: categoryType;
     title: string;
     image: string;
-    price: number;
+    price: number | null;
     description: string;
 }
 
@@ -41,16 +50,6 @@ interface IOrder {
     email: string;
     phone: string;
 }
-
-//интерфейсы набора возможных действий на странице
-interface IListModel<T> {
-    items: T[],
-
-    //действия доступные на странице
-    loadCard(id: string): Promise<void>,
-    loadBasket(): Promise<void>, 
-}
-
 
 
 interface IOrderPost {
@@ -81,11 +80,11 @@ interface IViewItem {
     price: number;
     description: string;
     onBuy: (evt: Event) => IItem | void;
-    onDelete: (evt: Event) => IItem | void;
 }
 
 //Интерфейс для вещей в корзине
 interface IViewBasketItem {
+    id: string;
     index: number;
     title: string;
     price: number;
@@ -125,7 +124,7 @@ class Item implements IItem {
     image: string;
     price: number;
     description: string;
-    inBasket: boolean;
+    //inBasket: boolean;
     constructor(data: IItem){
         this.id = data.id;
         this.category = data.category;
@@ -135,13 +134,13 @@ class Item implements IItem {
         this.description = data.description;
     }
 
-    addToBasket() {
-        this.inBasket = true;
-    }
+    // addToBasket() {
+    //     this.inBasket = true;
+    // }
 
-    removeFromBasket(){
-        this.inBasket = false;
-    }
+    // removeFromBasket(){
+    //     this.inBasket = false;
+    // }
 
 }
 
@@ -192,6 +191,26 @@ class OrderModel implements IOrder {
 
         //апи запрос на оформление заказа
     }
+    addOrder(item: Item) {
+        this.itemList.push(item.id);
+    }
+    removeOrder(id: string){
+        this.itemList = this.itemList.filter(itemInBasket => itemInBasket !== id);
+    }
+
+    getOrder() : IApiOrder{
+        const orderDetails = {
+            payment: this.payment,
+            email: this.email,
+            phone: this.phone,
+            address: this.address,
+            total: this.total,
+            items: this.itemList
+        }
+    
+
+        return orderDetails;
+    }
 }
 
 class CatalogModel {
@@ -211,6 +230,8 @@ class CatalogModel {
                 return resultItem as IItem;
         });
     }
+
+    //getItemById
 }
 
 class BasketModel {
@@ -219,11 +240,11 @@ class BasketModel {
     add(item: Item){
         this.items.push(item);
     }
-    remove(item: Item){
-        this.items = this.items.filter(itemInBasket => itemInBasket.id !== item.id);
+    remove(id: string){
+        this.items = this.items.filter(itemInBasket => itemInBasket.id !== id);
     }
     itemOnBasket(id: string){
-        return basketModel.items.some(item => item.id === id)
+        return this.items.some(item => item.id === id)
     }
     getCount(){
         console.log(this.items);
@@ -297,15 +318,15 @@ class CardView extends ModalView {
         this.cardPage.addEventListener('click', (evt) => {
             const target = evt.target as HTMLElement;
 
-            if (target.closest('.button')) {
+            if (target.closest('.card__button')) {
                 this.currentItem?.onBuy(evt);
                 return;
             }
 
-            if (target.closest('.basket__item-delete')) {
-                this.currentItem?.onDelete(evt);
-                return;
-            }
+            // if (target.closest('.basket__item-delete')) {
+            //     this.currentItem?.onDelete(evt);
+            //     return;
+            // }
         });
     }
 
@@ -320,33 +341,14 @@ class CardView extends ModalView {
 
         this.text.textContent = item.description;      
 
+        if(item.price) this.price.textContent = `${item.price} синапсов`;
+
         this.cardPage.append(this.cardElement);
         this.modalWindow.classList.add('modal_active');
 
     }
 
-    renderInBasket(item: IViewBasketItem, basket__list: HTMLUListElement){
-        
-        const cardBasketTemplate: HTMLTemplateElement = document.querySelector('#card-basket');
-        const cardBasketElement: HTMLElement = cardBasketTemplate.content.querySelector('.card_compact')!.cloneNode(true) as HTMLElement;
-        
-        const indexBasket: HTMLSpanElement = cardBasketElement.querySelector('.basket__item-index');
-        const titleBasket: HTMLSpanElement = cardBasketElement.querySelector('.card__title');
-        const priceBasket: HTMLSpanElement = cardBasketElement.querySelector('.card__price');
-        const deleteButton: HTMLButtonElement = cardBasketElement.querySelector('.basket__item-delete');
-
-
-        
-        indexBasket.textContent = `${item.index}`;
-        titleBasket.textContent = item.title;
-        priceBasket.textContent = `${item.price}`;
-
-        basket__list.append(cardBasketElement);
-        console.log(item);
-        console.log(basket__list);
-        return basket__list;
-        
-    }
+    
 
     disableBuyButton(){
         this.button.textContent = 'Товар уже в корзине';
@@ -368,6 +370,42 @@ class CardView extends ModalView {
     
 }
 
+class BasketItemView extends ModalView{
+    private currentItem: IViewBasketItem | null = null;
+
+
+    constructor(){
+        super();
+
+        
+
+    }
+
+    renderInBasket(item: IViewBasketItem, basket__list: HTMLUListElement){
+        this.currentItem = item;
+
+        const cardBasketTemplate: HTMLTemplateElement = document.querySelector('#card-basket');
+        const cardBasketElement: HTMLElement = cardBasketTemplate.content.querySelector('.card_compact')!.cloneNode(true) as HTMLElement;
+        
+        const indexBasket: HTMLSpanElement = cardBasketElement.querySelector('.basket__item-index');
+        const titleBasket: HTMLSpanElement = cardBasketElement.querySelector('.card__title');
+        const priceBasket: HTMLSpanElement = cardBasketElement.querySelector('.card__price');
+        const deleteButton: HTMLButtonElement = cardBasketElement.querySelector('.basket__item-delete');
+
+
+        cardBasketElement.dataset.id = item.id;
+
+        indexBasket.textContent = `${item.index}`;
+        titleBasket.textContent = item.title;
+        priceBasket.textContent = `${item.price}`;
+
+        basket__list.append(cardBasketElement);
+        console.log(item);
+        console.log(basket__list);
+        return basket__list;
+    }
+}
+
 class BasketView extends ModalView{
     icon = document.querySelector('.header__basket');
     counter = this.icon.querySelector('.header__basket-counter') as HTMLSpanElement;
@@ -376,21 +414,52 @@ class BasketView extends ModalView{
     basketElement = this.basketTemplate.content.querySelector('.basket')!.cloneNode(true) as HTMLElement;
     basketList : HTMLUListElement = this.basketElement.querySelector('.basket__list');
     deleteButton : HTMLButtonElement = this.basketElement.querySelector('.button');
+    basketPrice: HTMLSpanElement = this.basketElement.querySelector('.basket__price');
+    
+
+    onDeleteItem?: (id:string) => void;
+    onPlaceOrder?: () => void;
+
     constructor(){
         super();
         this.icon.addEventListener('click', openBasket);
+
+        this.cardPage.addEventListener('click', (evt) => {
+            const target = evt.target as HTMLElement;
+
+            const deleteBtn = target.closest('.basket__item-delete');
+            if (deleteBtn) {
+                const itemEl = deleteBtn.closest('.card_compact') as HTMLElement;
+                if (!itemEl) return;
+
+                const id = itemEl.dataset.id;
+                if (!id) return;
+
+                this.onDeleteItem?.(id);
+                return; // чтобы не выполнялись другие действия
+            }
+
+            // 2️⃣ Оформление заказа
+            const placeOrderBtn = target.closest('.basket__button');
+            if (placeOrderBtn) {
+                this.onPlaceOrder?.(); 
+                return;
+            }
+        });
 
     }
     renderCounter(count: number){
         this.counter.textContent = `${count}`;
     }
     
-    render(basket__list: HTMLUListElement){
+    render(basket__list: HTMLUListElement, total: number){
         console.log('work');
         this.cardPage.replaceChildren();
 
         this.basketList = basket__list;
+        this.basketPrice.textContent = `${total} синапсов`;
         console.log(basket__list);
+
         this.cardPage.append(this.basketElement);
         this.modalWindow.classList.add('modal_active');
 
@@ -400,43 +469,146 @@ class BasketView extends ModalView{
     }
 }
 
+class OrderFirstView extends ModalView{
+    orderFirstTemplate : HTMLTemplateElement = document.querySelector('#order');
+    orderFirstElement = this.orderFirstTemplate.content.querySelector('.form')!.cloneNode(true) as HTMLFormElement;
+    formErrors = this.orderFirstElement.querySelector('.form__errors');
+    cardBtn = this.orderFirstElement.querySelector('[name=card]') as HTMLButtonElement;
+    cashBtn = this.orderFirstElement.querySelector('[name=cash]') as HTMLButtonElement;
+
+    checkValid(orderElement: HTMLElement){
+        const formErrors = orderElement.querySelector('.form__errors');
+        const cardBtn = orderElement.querySelector('[name=card]') as HTMLButtonElement;
+        const cashBtn = orderElement.querySelector('[name=cash]') as HTMLButtonElement;
+        const inputAddress = orderElement.querySelector('[name=address]') as HTMLInputElement;
+        
+        console.log(formErrors);
+        console.log(cardBtn.dataset.choise);
+        console.log(cashBtn.dataset.choise);
+        if(cardBtn.dataset.choise === 'false' && cashBtn.dataset.choise === 'false'){
+            formErrors.textContent = 'выберите способ оплаты';
+        }
+        else if(inputAddress.value.length === 0){
+            formErrors.textContent = 'Заполните адрес доставки';
+        }
+        else {
+            formErrors.textContent = '';
+        }
+    }
+
+    toggleBtn(onBtn : HTMLButtonElement, offBtn: HTMLButtonElement){
+        onBtn.style.outline = '2px solid white';
+        onBtn.dataset.choise = 'true';
+        
+        offBtn.style.outline = 'none';
+        onBtn.dataset.choise = 'false';
+    }
+
+    constructor(){
+        super();
+        this.cardBtn.dataset.choise = 'false';
+        this.cashBtn.dataset.choise = 'false';
+
+        this.cardPage.addEventListener('click', (evt) => {
+            const target = evt.target as HTMLElement;
+
+            const cardBtn = target.closest('[name=card]');
+            if(cardBtn){
+                console.log('card click')
+                this.toggleBtn(this.cardBtn, this.cashBtn);
+                this.checkValid(this.orderFirstElement);
+                return;
+            }
+
+            const cashBtn = target.closest('[name=cash');
+            if(cashBtn){
+                console.log('cash click');
+                this.checkValid(this.orderFirstElement);
+                this.toggleBtn(this.cashBtn, this.cardBtn);
+                return;
+            }
+
+        })
+
+        this.orderFirstElement.addEventListener('input', (evt) => {
+            this.checkValid(this.orderFirstElement)
+
+        });
+            
+    }
+    
+
+    render(){
+        this.cardPage.replaceChildren();
+        
+        this.cardPage.append(this.orderFirstElement);
+    }
+}
+
 
 //Модели данных
 const catalogModel = new CatalogModel();
 const basketModel = new BasketModel();
+const orderModel = new OrderModel();
 
 //Отображения
 const catalogView: CatalogView = new CatalogView('gallery');
 const cardView: CardView = new CardView();
+const basketItemView: BasketItemView = new BasketItemView();
 const basketView: BasketView = new BasketView();
+const orderFirstView: OrderFirstView = new OrderFirstView();
+
+basketView.onDeleteItem = (id: string) => {
+                console.log('delete');
+                console.log(id);
+                basketModel.remove(id);
+                orderModel.removeOrder(id);
+                console.log(basketModel);
+                basketView.renderCounter(basketModel.getCount());
+                cardView.enableBuyButton();
+                openBasket();
+            }
+
+basketView.onPlaceOrder = () => {
+    orderFirstView.render();
+}
 
 function openBasket(){
     
     const items : Item[] = basketModel.getTotal();
     
     const itemsView: IViewBasketItem[] = [];
+    let total : number = 0;
     for (let i = 0; i < items.length; i++){
+        const currentItem = items[i];
+
         itemsView.push({
+            id: items[i].id,
             index: i+1,
             title: items[i].title,
-            price: items[i].price
+            price: items[i].price,
+            
         });
+        total += items[i].price;
     }
     console.log(itemsView);
     
-    const basketList : HTMLUListElement = basketView.getBasketList();
+    let basketList : HTMLUListElement = basketView.getBasketList();
     
     basketList.replaceChildren();
     itemsView.forEach((item) => {
         console.log(item);
         
-        cardView.renderInBasket(item, basketList);
-        console.log(basketList)
+        basketList = basketItemView.renderInBasket(item, basketList);
+        console.log(basketList);
     })
     console.log(basketList);
-    basketView.render(basketList);
+    orderModel.total = total;
+    basketView.render(basketList, total);
     
 }
+
+
 
 api.get('/product')
     .then((res : IApiList) => {
@@ -472,18 +644,10 @@ api.get('/product')
                                     
                                 // });
                                 console.log('выполнилось');
+                                orderModel.addOrder(new Item(resultItem));
                                 basketModel.add(new Item(resultItem));
                                 basketView.renderCounter(basketModel.getCount());
                                 cardView.disableBuyButton();
-                            },
-                            onDelete(evt: Event){
-                                console.log('delete');
-                                console.log(evt.target);
-                                basketModel.remove(new Item(resultItem));
-                                console.log(basketModel);
-                                basketView.renderCounter(basketModel.getCount());
-                                cardView.enableBuyButton();
-                                openBasket();
                             }
                         }
                         if(resultItem.price === null){
